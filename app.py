@@ -97,7 +97,7 @@ div.stButton > button[kind="primary"],
     padding: 0.65rem 1.5rem !important;
     letter-spacing: -0.01em !important;
 }
-div.stButton > button[kind="primary"] >div{
+div.stButton > button[kind="primary"] div>p{
     color:#000000 !important;            
 }            
 div.stButton > button[kind="primary"]:hover,
