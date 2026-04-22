@@ -1,0 +1,12 @@
+streamlit
+pandas
+selenium
+beautifulsoup4
+lxml
+Pillow
+requests
+openpyxl
+opencv-contrib-python-headless
+numpy
+scikit-learn
+playwright
