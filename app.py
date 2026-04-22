@@ -1,7 +1,18 @@
 import streamlit as st
 from playwright.sync_api import sync_playwright
 from concurrent.futures import ThreadPoolExecutor
-import os, shutil, re, time, zipfile
+import os, shutil, re, time, zipfile, subprocess, sys
+
+# ── Install Playwright browsers once per container boot ──────────────────────
+@st.cache_resource(show_spinner=False)
+def _ensure_browsers():
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "--with-deps",
+         "chromium", "firefox", "webkit"],
+        check=False, capture_output=True,
+    )
+
+_ensure_browsers()
 
 st.set_page_config(
     page_title="Browser Matrix | Happy Horizon",
