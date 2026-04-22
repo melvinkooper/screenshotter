@@ -1,43 +1,39 @@
 import os, shutil, re, time, zipfile, subprocess, sys
 
-# Pin browser path before playwright is imported so install and runtime
-# both resolve to the same directory, regardless of the Linux user.
+# Pin browser path before playwright is imported so both install subprocess
+# and runtime playwright resolve to the same directory.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/pw-browsers"
 
 import streamlit as st
 from playwright.sync_api import sync_playwright
 from concurrent.futures import ThreadPoolExecutor
 
-# ── Install Playwright browsers once per container boot ──────────────────────
-# No @st.cache_resource — just a flag file so we only install once.
-# --with-deps is intentionally omitted: packages.txt handles system libs
-# at Streamlit Cloud build time; --with-deps tries sudo apt at runtime and fails.
-_FLAG = "/tmp/pw-browsers/.installed"
+st.set_page_config(
+    page_title="Browser Matrix | Happy Horizon",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-def _ensure_browsers() -> bool:
-    if os.path.exists(_FLAG):
-        return True
+# ── Browser install (runs once per container; output shown for diagnostics) ──
+@st.cache_resource(show_spinner="Setting up browsers…")
+def _ensure_browsers() -> dict:
     os.makedirs("/tmp/pw-browsers", exist_ok=True)
     r = subprocess.run(
         [sys.executable, "-m", "playwright", "install",
          "chromium", "firefox", "webkit"],
         env=os.environ.copy(),
         check=False,
+        capture_output=True,
+        text=True,
     )
-    if r.returncode == 0:
-        open(_FLAG, "w").close()
-        return True
-    return False
+    return {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
 
-if not _ensure_browsers():
-    st.error("⚠️ Playwright browser install failed. Check deploy logs.")
+_install = _ensure_browsers()
+if not _install["ok"]:
+    st.error("Playwright browser install failed — see log below.")
+    with st.expander("Install log"):
+        st.code(_install["stdout"] + "\n" + _install["stderr"])
     st.stop()
-
-st.set_page_config(
-    page_title="Browser Matrix | Happy Horizon",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # ── Brand CSS (from brand-guide.md) ──────────────────────────────────────────
 st.markdown("""
