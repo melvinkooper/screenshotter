@@ -1,16 +1,28 @@
+import os, shutil, re, time, zipfile, subprocess, sys
+
+# Set a fixed browser path BEFORE importing playwright so both the install
+# subprocess and the runtime playwright process use the same location,
+# regardless of which Linux user Streamlit Cloud runs as.
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/pw-browsers"
+
 import streamlit as st
 from playwright.sync_api import sync_playwright
 from concurrent.futures import ThreadPoolExecutor
-import os, shutil, re, time, zipfile, subprocess, sys
 
 # ── Install Playwright browsers once per container boot ──────────────────────
+_FLAG = "/tmp/pw-browsers/.installed"
+
 @st.cache_resource(show_spinner=False)
 def _ensure_browsers():
-    subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "--with-deps",
-         "chromium", "firefox", "webkit"],
-        check=False, capture_output=True,
-    )
+    if not os.path.exists(_FLAG):
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "--with-deps",
+             "chromium", "firefox", "webkit"],
+            env=os.environ.copy(),
+            check=False,
+        )
+        os.makedirs("/tmp/pw-browsers", exist_ok=True)
+        open(_FLAG, "w").close()
 
 _ensure_browsers()
 
@@ -499,7 +511,7 @@ with st.sidebar:
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown('<span class="sidebar-label">URL</span>', unsafe_allow_html=True)
-    url_input = st.text_input("URL", placeholder="https://example.com", label_visibility="collapsed")
+    url_input = st.text_input("URL", placeholder="https://example.com", label_visibility="hidden")
 
     st.markdown('<span class="sidebar-label">Capture options</span>', unsafe_allow_html=True)
     full_page    = st.checkbox("Full-page screenshot", value=False)
