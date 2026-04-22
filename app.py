@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Browser install (runs once per container; output shown for diagnostics) ──
+# ── Browser install with full diagnostics ────────────────────────────────────
 @st.cache_resource(show_spinner="Setting up browsers…")
 def _ensure_browsers() -> dict:
     os.makedirs("/tmp/pw-browsers", exist_ok=True)
@@ -26,13 +26,35 @@ def _ensure_browsers() -> dict:
         capture_output=True,
         text=True,
     )
-    return {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
+    # Walk installed paths so we can see what actually landed where
+    installed = []
+    for base in ["/tmp/pw-browsers", os.path.expanduser("~/.cache/ms-playwright")]:
+        for root, _, files in os.walk(base):
+            for f in files:
+                installed.append(os.path.join(root, f))
+    return {
+        "ok": r.returncode == 0,
+        "rc": r.returncode,
+        "stdout": r.stdout[-3000:],
+        "stderr": r.stderr[-3000:],
+        "files": installed[:40],
+        "pw_path": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "NOT SET"),
+        "home": os.path.expanduser("~"),
+    }
 
 _install = _ensure_browsers()
+with st.sidebar:
+    with st.expander("🔧 Install diagnostics", expanded=not _install["ok"]):
+        st.code(
+            f"PLAYWRIGHT_BROWSERS_PATH: {_install['pw_path']}\n"
+            f"HOME: {_install['home']}\n"
+            f"Exit code: {_install['rc']}\n\n"
+            f"--- stdout ---\n{_install['stdout']}\n\n"
+            f"--- stderr ---\n{_install['stderr']}\n\n"
+            f"--- files found ---\n" + "\n".join(_install["files"])
+        )
 if not _install["ok"]:
-    st.error("Playwright browser install failed — see log below.")
-    with st.expander("Install log"):
-        st.code(_install["stdout"] + "\n" + _install["stderr"])
+    st.error("Playwright browser install failed — expand diagnostics in sidebar.")
     st.stop()
 
 # ── Brand CSS (from brand-guide.md) ──────────────────────────────────────────
@@ -416,7 +438,23 @@ def capture(url: str, device: dict, out_dir: str, idx: int, hide_banners: bool, 
     }
 
     with sync_playwright() as p:
-        browser = getattr(p, device["engine"]).launch(headless=True)
+        launch_opts: dict = {"headless": True}
+        if device["engine"] == "chromium":
+            # Prefer Playwright's managed binary; fall back to system chromium
+            sys_chrome = (shutil.which("chromium-browser") or
+                          shutil.which("chromium") or
+                          shutil.which("google-chrome-stable"))
+            import glob as _glob
+            pw_chrome = _glob.glob(
+                "/tmp/pw-browsers/chromium_headless_shell*/chrome-headless-shell-linux64/chrome-headless-shell"
+            ) or _glob.glob(
+                "/tmp/pw-browsers/chromium*/chrome-linux/chrome"
+            )
+            if not pw_chrome and sys_chrome:
+                launch_opts["executable_path"] = sys_chrome
+                launch_opts["args"] = ["--no-sandbox", "--disable-dev-shm-usage",
+                                       "--disable-setuid-sandbox"]
+        browser = getattr(p, device["engine"]).launch(**launch_opts)
         ctx_opts = {
             "viewport": {"width": device["vp"][0], "height": device["vp"][1]},
             "user_agent": device["ua"],
