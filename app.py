@@ -97,6 +97,9 @@ div.stButton > button[kind="primary"],
     padding: 0.65rem 1.5rem !important;
     letter-spacing: -0.01em !important;
 }
+div.stButton > button[kind="primary"] >div{
+    color:#000000 !important;            
+}            
 div.stButton > button[kind="primary"]:hover,
 [data-testid="stSidebar"] div.stButton > button[kind="primary"]:hover {
     background: var(--yellow-h) !important;
