@@ -1,8 +1,7 @@
 import os, shutil, re, time, zipfile, subprocess, sys
 
-# Set a fixed browser path BEFORE importing playwright so both the install
-# subprocess and the runtime playwright process use the same location,
-# regardless of which Linux user Streamlit Cloud runs as.
+# Pin browser path before playwright is imported so install and runtime
+# both resolve to the same directory, regardless of the Linux user.
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/pw-browsers"
 
 import streamlit as st
@@ -10,21 +9,29 @@ from playwright.sync_api import sync_playwright
 from concurrent.futures import ThreadPoolExecutor
 
 # ── Install Playwright browsers once per container boot ──────────────────────
+# No @st.cache_resource — just a flag file so we only install once.
+# --with-deps is intentionally omitted: packages.txt handles system libs
+# at Streamlit Cloud build time; --with-deps tries sudo apt at runtime and fails.
 _FLAG = "/tmp/pw-browsers/.installed"
 
-@st.cache_resource(show_spinner=False)
-def _ensure_browsers():
-    if not os.path.exists(_FLAG):
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "--with-deps",
-             "chromium", "firefox", "webkit"],
-            env=os.environ.copy(),
-            check=False,
-        )
-        os.makedirs("/tmp/pw-browsers", exist_ok=True)
+def _ensure_browsers() -> bool:
+    if os.path.exists(_FLAG):
+        return True
+    os.makedirs("/tmp/pw-browsers", exist_ok=True)
+    r = subprocess.run(
+        [sys.executable, "-m", "playwright", "install",
+         "chromium", "firefox", "webkit"],
+        env=os.environ.copy(),
+        check=False,
+    )
+    if r.returncode == 0:
         open(_FLAG, "w").close()
+        return True
+    return False
 
-_ensure_browsers()
+if not _ensure_browsers():
+    st.error("⚠️ Playwright browser install failed. Check deploy logs.")
+    st.stop()
 
 st.set_page_config(
     page_title="Browser Matrix | Happy Horizon",
