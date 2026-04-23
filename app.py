@@ -59,6 +59,12 @@ st.markdown("""
     box-sizing: border-box;
 }
 
+/* Restore Material Icons font so expander arrows don't render as literal text */
+.material-icons, .material-icons-sharp, .material-icons-round,
+[class*="material-icons"] {
+    font-family: 'Material Icons' !important;
+}
+
 #MainMenu, footer, .stDeployButton, [data-testid="stToolbar"] { visibility: hidden; }
 .main .block-container { padding-top: 1.5rem; max-width: 1440px; }
 
@@ -519,6 +525,8 @@ if "bm_lightbox" not in st.session_state:
     st.session_state.bm_lightbox = None
 if "custom_devices" not in st.session_state:
     st.session_state.custom_devices = []
+if "show_add_device" not in st.session_state:
+    st.session_state.show_add_device = False
 
 # ── Page header ───────────────────────────────────────────────────────────────
 logo_path = os.path.join(os.path.dirname(__file__), "brand_assets", "hh-logo.png")
@@ -574,7 +582,12 @@ with st.sidebar:
         st.session_state.custom_devices.pop(_to_remove)
         st.rerun()
 
-    with st.expander("➕  Add device"):
+    toggle_label = "▲ Hide" if st.session_state.show_add_device else "+ Add device"
+    if st.button(toggle_label, key="toggle_add_device", use_container_width=True):
+        st.session_state.show_add_device = not st.session_state.show_add_device
+        st.rerun()
+
+    if st.session_state.show_add_device:
         c_name = st.text_input("Device name", placeholder="My Device", key="c_name")
         col_w, col_h = st.columns(2)
         with col_w:
@@ -606,6 +619,7 @@ with st.sidebar:
                     "ua": ua,
                     "mobile": c_mobile,
                 })
+                st.session_state.show_add_device = False
                 st.rerun()
             else:
                 st.warning("Enter a device name.")
