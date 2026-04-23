@@ -517,6 +517,8 @@ if "bm_results" not in st.session_state:
     st.session_state.bm_results = []
 if "bm_lightbox" not in st.session_state:
     st.session_state.bm_lightbox = None
+if "custom_devices" not in st.session_state:
+    st.session_state.custom_devices = []
 
 # ── Page header ───────────────────────────────────────────────────────────────
 logo_path = os.path.join(os.path.dirname(__file__), "brand_assets", "hh-logo.png")
@@ -527,7 +529,7 @@ st.markdown(
     """
     <div class="hh-page-header">
         <h1>Browser Matrix <span class="hh-badge">New</span></h1>
-        <p>Screenshot any URL across 10 browser &amp; device presets — desktop and mobile, side by side.</p>
+        <p>Screenshot any URL across browser &amp; device presets — desktop and mobile, side by side. Add custom dimensions below.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -556,6 +558,58 @@ with st.sidebar:
         if st.checkbox(f"{icon}  {d['name']}", value=True, key=f"dev_{d['name']}"):
             selected_names.append(d["name"])
 
+    # ── Custom devices ────────────────────────────────────────────────────────
+    custom_selected = []
+    _to_remove = None
+    for i, d in enumerate(st.session_state.custom_devices):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            label = f"📐  {d['name']}  ({d['vp'][0]}×{d['vp'][1]})"
+            if st.checkbox(label, value=True, key=f"dev_custom_{i}"):
+                custom_selected.append(d)
+        with col2:
+            if st.button("✕", key=f"rm_custom_{i}", help="Remove device"):
+                _to_remove = i
+    if _to_remove is not None:
+        st.session_state.custom_devices.pop(_to_remove)
+        st.rerun()
+
+    with st.expander("➕  Add device"):
+        c_name = st.text_input("Device name", placeholder="My Device", key="c_name")
+        col_w, col_h = st.columns(2)
+        with col_w:
+            c_w = st.number_input("Width (px)", min_value=100, max_value=7680,
+                                  value=1280, step=1, key="c_w")
+        with col_h:
+            c_h = st.number_input("Height (px)", min_value=100, max_value=4320,
+                                  value=800, step=1, key="c_h")
+        c_mobile = st.checkbox("Mobile emulation", value=False, key="c_mobile",
+                               help="Enables touch events and mobile UA hints")
+        c_ua = st.text_area(
+            "User-agent (optional)",
+            placeholder="Leave blank for Chrome / Windows default",
+            key="c_ua",
+            height=72,
+        )
+        if st.button("Add device", key="btn_add_device", use_container_width=True):
+            if c_name.strip():
+                ua = c_ua.strip() or (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+                st.session_state.custom_devices.append({
+                    "name": c_name.strip(),
+                    "cat": "mobile" if c_mobile else "desktop",
+                    "engine": "chromium",
+                    "vp": (int(c_w), int(c_h)),
+                    "ua": ua,
+                    "mobile": c_mobile,
+                })
+                st.rerun()
+            else:
+                st.warning("Enter a device name.")
+
     st.markdown("<hr>", unsafe_allow_html=True)
     run_btn = st.button("▶  Run capture", type="primary", use_container_width=True)
 
@@ -565,7 +619,7 @@ if run_btn:
         st.warning("Enter a URL first.")
     else:
         url = ensure_https(url_input)
-        selected = [d for d in DEVICES if d["name"] in selected_names]
+        selected = [d for d in DEVICES if d["name"] in selected_names] + custom_selected
 
         if not selected:
             st.warning("Select at least one device.")
