@@ -14,6 +14,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Streamlit Cloud mounts the repo at /mount/src; use this to gate cloud-only behaviour.
+_IS_CLOUD = os.path.exists("/mount/src")
+
 # ── Browser install (flag-file guard — runs once per container lifetime) ───────
 _PW_FLAG = "/tmp/pw-browsers/.installed"
 
@@ -21,8 +24,9 @@ def _install_browsers() -> None:
     if os.path.exists(_PW_FLAG):
         return
     os.makedirs("/tmp/pw-browsers", exist_ok=True)
+    browsers = ["chromium"] if _IS_CLOUD else ["chromium", "firefox", "webkit"]
     subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium", "firefox", "webkit"],
+        [sys.executable, "-m", "playwright", "install", *browsers],
         env=os.environ.copy(),
         check=False,
         capture_output=True,
@@ -413,15 +417,17 @@ def capture(url: str, device: dict, out_dir: str, idx: int, hide_banners: bool, 
     }
 
     with sync_playwright() as p:
+        import glob as _glob
         launch_opts: dict = {"headless": True}
-        if device["engine"] == "chromium":
-            import glob as _glob
+
+        if _IS_CLOUD:
+            # On Streamlit Cloud only Chromium is available; resolve system binary
+            # if the Playwright-downloaded one is absent.
             pw_chrome = (
                 _glob.glob("/tmp/pw-browsers/chromium_headless_shell*/chrome-headless-shell-linux64/chrome-headless-shell")
                 or _glob.glob("/tmp/pw-browsers/chromium*/chrome-linux/chrome")
             )
             if not pw_chrome:
-                # System chromium installed via packages.txt (Streamlit Cloud)
                 _candidates = [
                     "/usr/bin/chromium",
                     "/usr/bin/chromium-browser",
@@ -429,12 +435,14 @@ def capture(url: str, device: dict, out_dir: str, idx: int, hide_banners: bool, 
                     shutil.which("chromium-browser"),
                     shutil.which("google-chrome-stable"),
                 ]
-                sys_chrome = next((p for p in _candidates if p and os.path.exists(p)), None)
+                sys_chrome = next((c for c in _candidates if c and os.path.exists(c)), None)
                 if sys_chrome:
                     launch_opts["executable_path"] = sys_chrome
                     launch_opts["args"] = ["--no-sandbox", "--disable-dev-shm-usage",
                                            "--disable-setuid-sandbox"]
-        browser = getattr(p, device["engine"]).launch(**launch_opts)
+            browser = p.chromium.launch(**launch_opts)
+        else:
+            browser = getattr(p, device["engine"]).launch(**launch_opts)
         ctx_opts = {
             "viewport": {"width": device["vp"][0], "height": device["vp"][1]},
             "user_agent": device["ua"],
